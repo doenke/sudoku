@@ -1,0 +1,13 @@
+# Suchmaschinen fernhalten – gilt auch für JSON, Manifest und Icons.
+# Das IfModule verhindert einen Serverfehler, falls mod_headers fehlt.
+<IfModule mod_headers.c>
+  Header always set X-Robots-Tag "noindex, nofollow"
+  # Seiten, Skripte, Styles, Rätselbank und Manifest immer beim Server
+  # nachfragen lassen, damit nach einem Deploy nichts Altes hängen bleibt.
+  <FilesMatch "\.(html|js|css|json|webmanifest)$">
+    Header set Cache-Control "no-cache"
+  </FilesMatch>
+</IfModule>
+
+AddType application/manifest+json .webmanifest
+AddType font/woff2 .woff2

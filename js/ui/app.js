@@ -547,3 +547,7 @@ let restored = null;
 try { restored = saved ? Game.fromJSON(saved) : null; } catch { restored = null; }
 if (restored) startGame(restored);
 openFromHash().then((opened) => { if (!opened && !state.game) openNewDialog(true); });
+
+if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) {
+  navigator.serviceWorker.register('sw.js', { scope: './' }).catch(() => {});
+}

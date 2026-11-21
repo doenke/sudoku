@@ -1,0 +1,101 @@
+# Deployment per SFTP aus GitHub
+
+`.github/workflows/deploy.yml` lässt bei jedem Push auf `main` zuerst die Tests
+laufen (`npm test`) und spiegelt den Stand danach per SFTP auf den Webspace: neue und geänderte Dateien werden hochgeladen, entfernte auf
+dem Server gelöscht. Gearbeitet wird mit `lftp` direkt im Runner – keine
+Action aus dem Marketplace, der man Zugangsdaten anvertrauen müsste.
+
+## Secrets anlegen
+
+Repository → Settings → Secrets and variables → Actions:
+
+| Secret | Pflicht | Inhalt |
+| --- | --- | --- |
+| `SFTP_HOST` | ja | Hostname des Webspace, z.B. `ssh.example-hoster.de` |
+| `SFTP_USER` | ja | Benutzername |
+| `SFTP_REMOTE_DIR` | ja | Zielverzeichnis, z.B. `/www/sudoku` (das Verzeichnis der Subdomain) |
+| `SFTP_KNOWN_HOSTS` | ja | Hostschlüssel des Servers (siehe unten) |
+| `SFTP_KEY` | eins von beiden | privater SSH-Schlüssel, komplett inklusive der `-----BEGIN`-Zeile |
+| `SFTP_PASSWORD` | eins von beiden | SFTP-Passwort, falls der Hoster keine Schlüssel anbietet |
+| `SFTP_PORT` | nein | Standard 22 |
+
+Ist `SFTP_KEY` gesetzt, wird der Schlüssel benutzt, sonst das Passwort.
+Schlüssel sind vorzuziehen: sie lassen sich beim Hoster einzeln zurückziehen.
+
+Beim Einfügen mitkopierte Leerzeichen und Zeilenumbrüche in `SFTP_HOST`,
+`SFTP_USER`, `SFTP_PORT` und `SFTP_REMOTE_DIR` entfernt der Workflow selbst.
+Enthält der Benutzername etwas anderes als Buchstaben, Ziffern und `. _ - @`,
+bricht er mit einer verständlichen Meldung ab, statt ssh eine kaputte
+Kommandozeile unterzuschieben.
+
+**`SFTP_KNOWN_HOSTS`** verhindert, dass die Zugangsdaten an einen
+untergeschobenen Server gehen. Ohne dieses Secret bricht der Workflow ab –
+das ist Absicht.
+
+Am einfachsten liefert der Workflow die Schlüssel selbst: Actions →
+**Deploy per SFTP** → *Run workflow* → **Nur die Hostschlüssel des Servers
+ausgeben** anhaken. Im Protokoll stehen dann die Fingerabdrücke zum Abgleich
+mit den Angaben des Hosters und darunter die Zeilen, die vollständig in das
+Secret gehören. Dafür genügt bereits ein gesetztes `SFTP_HOST`.
+
+Lokal geht es auch mit
+
+```bash
+ssh-keyscan -p 2244 ssh.example-hoster.de
+```
+
+– aber Vorsicht: ältere `ssh-keyscan`-Versionen, etwa das mit Windows
+gelieferte, scheitern an neueren Key-Exchange-Verfahren
+(`choose_kex: unsupported KEX method …`) und geben dann **nur Kommentarzeilen
+mit `#` aus, keinen einzigen Schlüssel**. Landet so etwas im Secret, meldet
+ssh später „Host key verification failed". Der Workflow prüft deshalb vorab,
+ob überhaupt eine Schlüsselzeile enthalten ist.
+
+Bei einem abweichenden Port muss die Zeile mit `[host]:port` beginnen – genau
+so, wie `ssh-keyscan -p` es ausgibt.
+Fehlt das bei einem manuell gescannten Schlüssel (`ssh-keyscan` ohne `-p`),
+ergänzt der Workflow die Schreibweise für genau diesen Host selbst. Findet ssh
+trotzdem keinen passenden Eintrag, bricht der Workflow vor dem Upload ab und
+zeigt, welche Hosts im Secret stehen und welche Fingerabdrücke der Server
+anbietet.
+
+## Erster Lauf
+
+Actions → **Deploy per SFTP** → *Run workflow*, dabei **Nur anzeigen, was
+hochgeladen und gelöscht würde** anhaken. Der Trockenlauf verändert nichts und
+zeigt im Protokoll, welche Dateien angefasst würden – besonders die Zeilen
+`Removing old file`. Erst wenn die Liste plausibel aussieht, ohne Haken
+wiederholen.
+
+Danach genügt ein Push auf `main`. Ein manueller Start funktioniert aus jedem
+Branch.
+
+## Wichtig zu wissen
+
+- Der Workflow spiegelt **mit Löschen**. Zeigt `SFTP_REMOTE_DIR` versehentlich
+  auf ein Verzeichnis mit anderen Inhalten, verschwinden diese. Deshalb ein
+  eigenes Unterverzeichnis verwenden; das Wurzelverzeichnis lehnt der Workflow ab.
+- Schlagen die Tests fehl, wird nichts hochgeladen.
+- Nicht übertragen werden `.git`, `.github`, `.gitignore`, `DEPLOYMENT.md`,
+  `README.md`, `CLAUDE.md`, `LICENSE`, `package.json`, `versions.json` sowie
+  `tools/`, `tests/`, `scripts/`, `docs/` und `__pycache__/`.
+- Die Version `x.yy.zzz` (siehe `versions.json` und `scripts/version.mjs`)
+  wird vor dem Upload in jede `.js`-Datei gestempelt, die den Platzhalter
+  `__VERSION__` enthält: in den Service Worker `sw.js` und in `js/ui/app.js`
+  (in den Einstellungen als „Version“). Dadurch erkennt die installierte App
+  das Update und ersetzt den Cache still, ohne Meldung. Die Version steht am
+  Ende des Laufs unter „Ergebnis“ und in der Zusammenfassung.
+- Dafür braucht der Checkout die volle Git-Historie (`fetch-depth: 0`).
+- Außerdem schreibt der Workflow die Liste aller hochgeladenen Dateien in
+  `sw.js` (Platzhalter `/*__FILES__*/`), damit die App samt Rätselbank offline
+  vorgeladen wird.
+- Weil ein frischer Checkout alle Zeitstempel auf „jetzt" setzt, lädt lftp
+  jedes Mal alle Dateien neu hoch. Bei rund 0,6 MB fällt das nicht ins Gewicht.
+- Zwei Deploys gleichzeitig verhindert die `concurrency`-Gruppe.
+
+## Subdomain
+
+`sudoku.kanonenwiese.de` muss beim Hoster auf das Verzeichnis zeigen, das in
+`SFTP_REMOTE_DIR` steht, mit HTTPS (für den Service Worker Pflicht). Die
+`.htaccess` setzt `X-Robots-Tag` und `Cache-Control: no-cache` für Seiten,
+Skripte, Styles und die Rätselbank.

@@ -1,0 +1,301 @@
+name: Deploy per SFTP
+
+# Lädt den Stand des Branches auf den Webspace. Es wird gespiegelt: neue und
+# geänderte Dateien werden hochgeladen, entfernte auf dem Server gelöscht.
+# Vorher laufen die Tests; schlagen sie fehl, wird nichts hochgeladen.
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Nur anzeigen, was hochgeladen und gelöscht würde"
+        type: boolean
+        default: false
+      show_host_keys:
+        description: "Nur die Hostschlüssel des Servers ausgeben (für SFTP_KNOWN_HOSTS)"
+        type: boolean
+        default: false
+
+# Zwei gleichzeitige Deploys auf denselben Webspace wären ein Kuddelmuddel.
+concurrency:
+  group: sftp-deploy-sudoku
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  # Hilfslauf: liest die Hostschlüssel des Servers aus und gibt sie im
+  # Protokoll aus, damit sie in das Secret SFTP_KNOWN_HOSTS kopiert werden
+  # können. Nützlich, weil ältere ssh-keyscan-Versionen (etwa das mit Windows
+  # gelieferte) an neueren Key-Exchange-Verfahren scheitern und dann nur
+  # Kommentarzeilen ausgeben. Hostschlüssel sind öffentlich – hier wird
+  # nichts Vertrauliches protokolliert.
+  hostkeys:
+    if: ${{ inputs.show_host_keys }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Hostschlüssel abfragen
+        env:
+          SFTP_HOST: ${{ secrets.SFTP_HOST }}
+          SFTP_PORT: ${{ secrets.SFTP_PORT || '22' }}
+        run: |
+          set -eu
+          HOST=$(printf '%s' "${SFTP_HOST:-}" | tr -d '[:space:]')
+          PORT=$(printf '%s' "${SFTP_PORT:-22}" | tr -d '[:space:]')
+          if [ -z "$HOST" ]; then
+            echo "::error::Das Secret SFTP_HOST fehlt."
+            exit 1
+          fi
+          echo "Frage $HOST:$PORT ab …"
+          ssh-keyscan -p "$PORT" "$HOST" > keys.txt 2> scan.log || true
+          if ! grep -qv '^#' keys.txt || [ ! -s keys.txt ]; then
+            echo "::error::Keine Hostschlüssel erhalten. Meldung des Scanners:"
+            sed 's/^/  /' scan.log
+            exit 1
+          fi
+          echo
+          echo "Fingerabdrücke zum Abgleich mit den Angaben des Hosters:"
+          ssh-keyscan -p "$PORT" "$HOST" 2>/dev/null | ssh-keygen -lf - | sed 's/^/  /'
+          echo
+          echo "--- Ab hier alles in das Secret SFTP_KNOWN_HOSTS kopieren ---"
+          grep -v '^#' keys.txt
+          echo "--- bis hier ---"
+
+  deploy:
+    if: ${{ !inputs.show_host_keys }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Quellstand holen
+        uses: actions/checkout@v5
+        with:
+          # Die volle Historie wird für die Versionsnummer gebraucht.
+          fetch-depth: 0
+
+      - name: Node einrichten
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Tests
+        run: npm test
+
+      - name: Version stempeln
+        id: version
+        run: |
+          set -eu
+          # x.yy.zzz aus versions.json und der Git-Historie (scripts/version.mjs).
+          # Ein neuer Wert in sw.js lässt die installierte App das Update
+          # erkennen; es läuft still. In den Einstellungen steht dieselbe Version.
+          VERSION=$(node scripts/version.mjs app)
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          files=$(grep -rl --include='*.js' --exclude-dir=.git --exclude-dir=tools --exclude-dir=tests --exclude-dir=scripts '__VERSION__' . || true)
+          if [ -z "$files" ]; then
+            echo "::warning::Keine Datei mit __VERSION__ gefunden."
+          else
+            printf '%s\n' $files | xargs sed -i "s/__VERSION__/$VERSION/"
+            grep -rn --include='*.js' --exclude-dir=.git "const VERSION" .
+          fi
+
+      - name: Dateiliste für den Service Worker
+        run: |
+          set -eu
+          # Alle Dateien, die hochgeladen werden, kommen in die Vorlade-Liste
+          # von sw.js – so ist die App samt Rätselbank nach dem ersten Besuch
+          # komplett offline spielbar. Ausnahmen wie beim Hochladen, dazu der
+          # Service Worker selbst und Dateien, die die App nicht braucht.
+          python3 - <<'PY'
+          import json, os
+          skip_dirs = {'.git', '.github', 'tools', 'tests', 'scripts', 'docs', 'node_modules', '__pycache__'}
+          skip_files = {'.gitignore', 'DEPLOYMENT.md', 'README.md', 'CLAUDE.md', 'LICENSE',
+                        'package.json', 'versions.json', '.htaccess', 'robots.txt', 'sw.js',
+                        'OFL.txt', 'icon-512.png', 'icon-maskable-512.png'}
+          files = ['./']
+          for root, dirs, names in os.walk('.'):
+              dirs[:] = sorted(d for d in dirs if d not in skip_dirs)
+              for name in sorted(names):
+                  if name in skip_files:
+                      continue
+                  files.append(os.path.relpath(os.path.join(root, name), '.').replace(os.sep, '/'))
+          src = open('sw.js', encoding='utf-8').read()
+          marker = '/*__FILES__*/'
+          i = src.index(marker)
+          j = src.index(';', i)
+          src = src[:i] + json.dumps(files, ensure_ascii=False) + src[j:]
+          open('sw.js', 'w', encoding='utf-8').write(src)
+          print(len(files), 'Dateien in sw.js')
+          PY
+          grep -c "js/ui/app.js" sw.js
+          grep -c "data/killer-teuflisch.json" sw.js
+
+      - name: lftp installieren
+        run: |
+          set -eu
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq lftp sshpass
+
+      - name: Zugangsdaten einrichten
+        env:
+          SFTP_KEY: ${{ secrets.SFTP_KEY }}
+          SFTP_KNOWN_HOSTS: ${{ secrets.SFTP_KNOWN_HOSTS }}
+        run: |
+          set -eu
+          install -m 700 -d ~/.ssh
+          if [ -z "${SFTP_KNOWN_HOSTS:-}" ]; then
+            echo "::error::Das Secret SFTP_KNOWN_HOSTS fehlt. Diesen Workflow einmal"
+            echo "::error::manuell mit der Option 'Nur die Hostschlüssel ausgeben' starten."
+            exit 1
+          fi
+          printf '%s\n' "$SFTP_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+          # ssh-keyscan gibt Kommentarzeilen auch dann aus, wenn es gar keinen
+          # Schlüssel bekommen hat. Wird so etwas eingefügt, scheiterte der Lauf
+          # bisher erst später mit "Host key verification failed".
+          if ! grep -qE '^[^#[:space:]]' ~/.ssh/known_hosts; then
+            echo "::error::SFTP_KNOWN_HOSTS enthält keine Schlüsselzeile, nur Kommentare oder Leerzeilen."
+            echo "::error::Diesen Workflow einmal manuell mit 'Nur die Hostschlüssel ausgeben' starten"
+            echo "::error::und die dort protokollierten Zeilen vollständig in das Secret kopieren."
+            exit 1
+          fi
+          echo "Hostschlüssel im Secret: $(grep -cE '^[^#[:space:]]' ~/.ssh/known_hosts)"
+          if [ -n "${SFTP_KEY:-}" ]; then
+            printf '%s\n' "$SFTP_KEY" > ~/.ssh/deploy_key
+            chmod 600 ~/.ssh/deploy_key
+          fi
+
+      - name: Auf den Webspace spiegeln
+        env:
+          SFTP_HOST: ${{ secrets.SFTP_HOST }}
+          SFTP_PORT: ${{ secrets.SFTP_PORT || '22' }}
+          SFTP_USER: ${{ secrets.SFTP_USER }}
+          SFTP_KEY: ${{ secrets.SFTP_KEY }}
+          SFTP_PASSWORD: ${{ secrets.SFTP_PASSWORD }}
+          REMOTE_DIR: ${{ secrets.SFTP_REMOTE_DIR }}
+          DRY_RUN: ${{ inputs.dry_run }}
+        run: |
+          set -eu
+
+          # Beim Einfügen in die Secret-Maske rutschen leicht Leerzeichen oder
+          # Zeilenumbrüche mit. Die machen sonst weiter unten das lftp-Skript
+          # kaputt, statt eine verständliche Meldung zu erzeugen.
+          SFTP_HOST=$(printf '%s' "${SFTP_HOST:-}" | tr -d '[:space:]')
+          SFTP_USER=$(printf '%s' "${SFTP_USER:-}" | tr -d '[:space:]')
+          SFTP_PORT=$(printf '%s' "${SFTP_PORT:-22}" | tr -d '[:space:]')
+          REMOTE_DIR=$(printf '%s' "${REMOTE_DIR:-}" | tr -d '\r\n')
+
+          for name in SFTP_HOST SFTP_USER REMOTE_DIR; do
+            eval "value=\${$name:-}"
+            if [ -z "$value" ]; then
+              echo "::error::Das Secret $name fehlt."
+              exit 1
+            fi
+          done
+
+          # Der Benutzername landet unverändert in der ssh-Kommandozeile.
+          case "$SFTP_USER" in
+            *[!A-Za-z0-9._@-]*)
+              echo "::error::SFTP_USER enthält unerwartete Zeichen. Erlaubt sind Buchstaben, Ziffern und . _ - @"
+              exit 1 ;;
+          esac
+          case "$SFTP_HOST" in
+            *[!A-Za-z0-9.-]*)
+              echo "::error::SFTP_HOST enthält unerwartete Zeichen."
+              exit 1 ;;
+          esac
+          case "$SFTP_PORT" in
+            ''|*[!0-9]*) echo "::error::SFTP_PORT muss eine Zahl sein."; exit 1 ;;
+          esac
+          if [ -z "${SFTP_KEY:-}" ] && [ -z "${SFTP_PASSWORD:-}" ]; then
+            echo "::error::Weder SFTP_KEY noch SFTP_PASSWORD gesetzt."
+            exit 1
+          fi
+
+          # Notbremse: --delete auf dem Wurzelverzeichnis wäre verheerend.
+          case "$REMOTE_DIR" in
+            "/"|""|".") echo "::error::SFTP_REMOTE_DIR darf nicht das Wurzelverzeichnis sein."; exit 1 ;;
+          esac
+
+          # Bei einem Port ungleich 22 sucht ssh nur nach Zeilen, die mit
+          # "[host]:port" beginnen. Ein ssh-keyscan ohne -p liefert aber "host …".
+          # Solche Zeilen für genau diesen Host um den Port ergänzen – gleicher
+          # Schlüssel, gleicher Host, nur die Schreibweise.
+          KH="$HOME/.ssh/known_hosts"
+          if [ "$SFTP_PORT" != "22" ]; then
+            awk -v h="$SFTP_HOST" -v hp="[$SFTP_HOST]:$SFTP_PORT" '
+              { print }
+              $1 == h { $1 = hp; print }
+            ' "$KH" > "$KH.new" && mv "$KH.new" "$KH"
+            chmod 600 "$KH"
+          fi
+          LOOKUP="$SFTP_HOST"
+          [ "$SFTP_PORT" != "22" ] && LOOKUP="[$SFTP_HOST]:$SFTP_PORT"
+          if ! ssh-keygen -F "$LOOKUP" -f "$KH" > /dev/null; then
+            echo "::error::SFTP_KNOWN_HOSTS enthält keinen Eintrag für $LOOKUP."
+            echo "Einträge im Secret (Host-Spalte):"
+            grep -E '^[^#[:space:]]' "$KH" | awk '{print "  " $1 "  " $2}' | sort -u
+            echo "Der Server bietet an (Fingerabdrücke):"
+            ssh-keyscan -p "$SFTP_PORT" "$SFTP_HOST" 2>/dev/null | ssh-keygen -lf - | sed 's/^/  /' || true
+            echo "::error::Workflow mit 'Nur die Hostschlüssel ausgeben' starten und die Zeilen neu ins Secret kopieren."
+            exit 1
+          fi
+          # Passt der Host, aber nicht der Schlüssel, hilft ein Vergleich der Fingerabdrücke.
+          echo "Fingerabdrücke im Secret für $LOOKUP:"
+          ssh-keygen -F "$LOOKUP" -f "$KH" | grep -v '^#' | ssh-keygen -lf - | sed 's/^/  /' || true
+          echo "Fingerabdrücke, die der Server anbietet:"
+          ssh-keyscan -p "$SFTP_PORT" "$SFTP_HOST" 2>/dev/null | ssh-keygen -lf - | sed 's/^/  /' || true
+
+          # Der Benutzername gehört an ssh, nicht an lftp: bei "open -u user URL"
+          # ohne Passwort verwirft lftp den Namen und meldet sich anonym an –
+          # ssh verbindet dann als der Runner-Benutzer und scheitert.
+          SSH_OPTS="-a -x -l $SFTP_USER -o StrictHostKeyChecking=yes -o UserKnownHostsFile=$HOME/.ssh/known_hosts"
+          if [ -n "${SFTP_KEY:-}" ]; then
+            CONNECT="ssh $SSH_OPTS -i $HOME/.ssh/deploy_key -o IdentitiesOnly=yes -o PreferredAuthentications=publickey"
+          else
+            export SSHPASS="$SFTP_PASSWORD"
+            CONNECT="sshpass -e ssh $SSH_OPTS -o PreferredAuthentications=password -o PubkeyAuthentication=no"
+          fi
+
+          DRY=""
+          if [ "${DRY_RUN:-false}" = "true" ]; then
+            DRY="--dry-run"
+            echo "Trockenlauf – es wird nichts verändert."
+          fi
+
+          lftp -c "
+            set cmd:fail-exit yes;
+            set net:max-retries 3;
+            set net:timeout 20;
+            set sftp:auto-confirm no;
+            set sftp:connect-program \"$CONNECT\";
+            open sftp://$SFTP_HOST:$SFTP_PORT;
+            mirror --reverse --delete --verbose --no-perms $DRY \
+                   --exclude '^\.git/' \
+                   --exclude '^\.github/' \
+                   --exclude '^\.gitignore$' \
+                   --exclude '^DEPLOYMENT\.md$' \
+                   --exclude '(^|/)README\.md$' \
+                   --exclude '(^|/)CLAUDE\.md$' \
+                   --exclude '(^|/)tools/' \
+                   --exclude '^tests/' \
+                   --exclude '^scripts/' \
+                   --exclude '^docs/' \
+                   --exclude '^node_modules/' \
+                   --exclude '^package\.json$' \
+                   --exclude '^versions\.json$' \
+                   --exclude '^LICENSE$' \
+                   --exclude '(^|/)__pycache__/' \
+                   ./ \"$REMOTE_DIR\";
+          "
+
+      - name: Ergebnis
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          DRY_RUN: ${{ inputs.dry_run }}
+        run: |
+          if [ "${DRY_RUN:-false}" = "true" ]; then WHAT="Trockenlauf"; else WHAT="Ausgerollt"; fi
+          echo "$WHAT: Version $VERSION (${GITHUB_SHA:0:12})"
+          echo "### $WHAT: Sudoku $VERSION" >> "$GITHUB_STEP_SUMMARY"
+          echo "Commit \`${GITHUB_SHA:0:12}\`" >> "$GITHUB_STEP_SUMMARY"
