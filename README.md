@@ -117,6 +117,7 @@ praktisch für einen Käfig, von dem du weißt, dass er 1 und 2 enthält.
 | Backspace / Entf | Löschen |
 | Strg+Z / Strg+Y | Rückgängig / Wiederholen |
 | Shift-/Strg-Klick, Ziehen | mehrere Zellen wählen |
+| K | Käfig-Kombinationen ein/aus |
 | N | neues Rätsel |
 | ? | Tastenübersicht |
 
@@ -141,8 +142,11 @@ zwei Stärken:
 
 ### 5. Käfig-Kombinationen
 
-Schaltest du in den Einstellungen die Kombinationen ein, zeigt die App zum
-gewählten Käfig alle Ziffernkombinationen, die zur Summe und Größe passen.
+Bei Killer-Rätseln sitzt in der Werkzeugleiste der Knopf **Kombis** (am
+Laptop auch die Taste K). Ist er an, zeigt die App zum gewählten Käfig alle
+Ziffernkombinationen, die zur Summe und Größe passen – ein Tipp, und das Panel
+ist wieder weg, wenn du es lieber selbst rechnen willst. Der Knopf und der
+Schalter in den Einstellungen sind dieselbe Einstellung.
 Kombinationen, die durch gesetzte Ziffern nicht mehr gehen, sind
 durchgestrichen. Welche du daraus ableitest, bleibt deine Sache.
 

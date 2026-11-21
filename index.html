@@ -31,6 +31,7 @@
   <symbol id="i-undo" viewBox="0 0 24 24"><path d="M9 14L4 9l5-5M4 9h10a6 6 0 0 1 0 12h-3"/></symbol>
   <symbol id="i-redo" viewBox="0 0 24 24"><path d="M15 14l5-5-5-5M20 9H10a6 6 0 0 0 0 12h3"/></symbol>
   <symbol id="i-fill" viewBox="0 0 24 24"><path d="M4 4h4v4H4zM10 4h4v4h-4zM16 4h4v4h-4zM4 10h4v4H4zM10 10h4v4h-4zM16 10h4v4h-4zM4 16h4v4H4zM10 16h4v4h-4zM16 16h4v4h-4z"/></symbol>
+  <symbol id="i-combos" viewBox="0 0 24 24"><path d="M17 5H7l6 7-6 7h10"/></symbol>
   <symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7"/></symbol>
 </svg>
 
@@ -71,6 +72,7 @@
         <button class="tool" id="btn-undo" title="Rückgängig (Strg+Z)"><svg><use href="#i-undo"/></svg><span>Zurück</span></button>
         <button class="tool" id="btn-redo" title="Wiederholen (Strg+Y)"><svg><use href="#i-redo"/></svg><span>Vor</span></button>
         <button class="tool" id="btn-fill" title="Alle Kandidaten ausfüllen" hidden><svg><use href="#i-fill"/></svg><span>Kandidaten</span></button>
+        <button class="tool" id="btn-combos" aria-pressed="false" title="Käfig-Kombinationen ein/aus (K)" hidden><svg><use href="#i-combos"/></svg><span>Kombis</span></button>
         <button class="tool" id="btn-check" title="Prüfen"><svg><use href="#i-check"/></svg><span>Prüfen</span></button>
       </div>
 
@@ -155,6 +157,7 @@
       <tr><th><kbd>Strg</kbd> + <kbd>Y</kbd></th><td>Wiederholen</td></tr>
       <tr><th>Klick mit <kbd>Shift</kbd>/<kbd>Strg</kbd>, Ziehen</th><td>Mehrere Zellen wählen – Ziffern werden dann Notizen in allen</td></tr>
       <tr><th><kbd>Esc</kbd></th><td>Auswahl auf eine Zelle zurück</td></tr>
+      <tr><th><kbd>K</kbd></th><td>Käfig-Kombinationen ein/aus (Killer)</td></tr>
       <tr><th><kbd>N</kbd></th><td>Neues Rätsel</td></tr>
       <tr><th><kbd>?</kbd></th><td>Diese Übersicht</td></tr>
     </table>

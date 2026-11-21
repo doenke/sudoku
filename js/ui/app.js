@@ -81,6 +81,8 @@ function render() {
   $('btn-redo').disabled = !g.future.length || g.solved;
   $('btn-fill').hidden = !s.fillCandidates || !s.notes;
   $('btn-check').hidden = s.errors !== 'off';
+  $('btn-combos').hidden = !g.model.cages.length;
+  $('btn-combos').setAttribute('aria-pressed', String(!!s.combos));
   for (const el of [$('btn-fill'), $('btn-check'), $('btn-erase')]) el.disabled = g.solved;
   for (const b of padButtons) b.classList.toggle('done', g.count(+b.dataset.d) >= 9);
   renderCombos();
@@ -452,6 +454,14 @@ function toggleNoteMode() {
   render();
 }
 
+/** Shows or hides the cage combinations panel; same setting as in the dialog. */
+function toggleCombos() {
+  if (!state.game?.model.cages.length) return;
+  state.settings.combos = !state.settings.combos;
+  saveSettings(state.settings);
+  render();
+}
+
 function fillCandidates() {
   const g = state.game;
   if (!g || g.solved || !state.settings.fillCandidates) return;
@@ -500,6 +510,7 @@ document.addEventListener('keydown', (e) => {
     case 'Backspace': case 'Delete': case 'Digit0': case 'Numpad0': e.preventDefault(); erase(); break;
     case 'Escape': state.selection = new Set([state.cursor]); render(); break;
     case 'KeyN': e.preventDefault(); openNewDialog(); break;
+    case 'KeyK': e.preventDefault(); toggleCombos(); break;
     default:
       if (e.key === '?') { e.preventDefault(); $('dlg-keys').showModal(); }
   }
@@ -525,6 +536,7 @@ $('btn-undo').addEventListener('click', undo);
 $('btn-redo').addEventListener('click', redo);
 $('btn-fill').addEventListener('click', fillCandidates);
 $('btn-check').addEventListener('click', check);
+$('btn-combos').addEventListener('click', toggleCombos);
 $('btn-new').addEventListener('click', () => openNewDialog());
 $('btn-keys').addEventListener('click', () => $('dlg-keys').showModal());
 
