@@ -4,9 +4,8 @@ import { Board } from './board.js';
 import { Game } from './game.js';
 import { load, save } from './store.js';
 import { formatTime } from './stats.js';
-import { decodePuzzle } from '../core/codec.js';
-import { VARIANTS, levelByValue } from '../core/variants.js';
-import { SAMPLES } from './samples.js';
+import { VARIANTS, PLAYABLE, LEVELS, levelByValue } from '../core/variants.js';
+import { pickPuzzle, markPlayed, unplayedCount } from './bank.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -131,10 +130,82 @@ function startGame(game) {
   startTimer();
 }
 
-let sampleIndex = 0;
-function newSample() {
-  const code = SAMPLES[sampleIndex++ % SAMPLES.length];
-  startGame(new Game(decodePuzzle(code)));
+/** Leaving an unsolved game with moves counts as abandoned. */
+async function leaveCurrent(question) {
+  const g = state.game;
+  if (!g || g.solved || !g.moves) return true;
+  if (!(await confirmDialog('Rätsel abbrechen?', question, 'Abbrechen und weiter'))) return false;
+  onAbandon(g);
+  return true;
+}
+
+function onAbandon() {}
+
+let newVariant = load('last', { variant: 'killer' }).variant;
+
+function renderNewDialog() {
+  const box = $('new-variant');
+  box.querySelectorAll('label').forEach((l) => l.remove());
+  for (const key of PLAYABLE) {
+    const label = document.createElement('label');
+    label.innerHTML = `<input type="radio" name="variant" value="${key}"><span>${VARIANTS[key].name}</span>`;
+    const input = label.querySelector('input');
+    input.checked = key === newVariant;
+    input.addEventListener('change', () => { newVariant = key; renderLevels(); });
+    box.append(label);
+  }
+  renderLevels();
+}
+
+function renderLevels() {
+  const box = $('new-levels');
+  box.querySelectorAll('button').forEach((b) => b.remove());
+  for (const level of LEVELS) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.innerHTML = `<span>${level.name}</span><small>…</small>`;
+    const g = state.game;
+    if (g && !g.solved && g.variant === newVariant && g.level === level.value) b.classList.add('current');
+    b.addEventListener('click', () => chooseLevel(level.key));
+    box.append(b);
+    unplayedCount(newVariant, level.key).then(({ total, fresh }) => {
+      b.querySelector('small').textContent = fresh ? `${fresh} von ${total} neu` : `alle ${total} gespielt`;
+    }).catch(() => { b.querySelector('small').textContent = 'nicht verfügbar'; b.disabled = true; });
+  }
+}
+
+function openNewDialog(first = false) {
+  $('new-hint').textContent = first
+    ? 'Willkommen! Such dir eine Spielart und eine Stufe aus. Leicht gibt es hier nicht.'
+    : '';
+  $('new-hint').hidden = !first;
+  $('new-cancel').hidden = !state.game;
+  renderNewDialog();
+  $('dlg-new').showModal();
+}
+
+async function chooseLevel(levelKey) {
+  $('dlg-new').close();
+  if (!(await leaveCurrent('Dein aktuelles Rätsel ist noch nicht gelöst. Wenn du ein neues anfängst, gilt es als abgebrochen.'))) return;
+  save('last', { variant: newVariant });
+  try {
+    const pick = await pickPuzzle(newVariant, levelKey);
+    markPlayed(pick.id);
+    startGame(new Game(pick.puzzle, { source: 'bank' }));
+    if (pick.repeat) showToast('Alle Rätsel dieser Stufe hast du schon gespielt – hier eins zum Wiederholen.');
+  } catch {
+    showToast('Die Rätsel konnten nicht geladen werden.');
+  }
+}
+
+function confirmDialog(title, text, yes = 'OK') {
+  const dlg = $('dlg-confirm');
+  $('confirm-title').textContent = title;
+  $('confirm-text').textContent = text;
+  $('confirm-yes').textContent = yes;
+  dlg.returnValue = '';
+  dlg.showModal();
+  return new Promise((resolve) => dlg.addEventListener('close', () => resolve(dlg.returnValue === 'yes'), { once: true }));
 }
 
 function afterMove() {
@@ -211,7 +282,7 @@ document.addEventListener('keydown', (e) => {
     case 'Space': e.preventDefault(); toggleNoteMode(); break;
     case 'Backspace': case 'Delete': case 'Digit0': case 'Numpad0': e.preventDefault(); erase(); break;
     case 'Escape': state.selection = new Set([state.cursor]); render(); break;
-    case 'KeyN': newSample(); break;
+    case 'KeyN': e.preventDefault(); openNewDialog(); break;
     default:
       if (e.key === '?') $('dlg-keys').showModal();
   }
@@ -235,7 +306,7 @@ $('btn-notes').addEventListener('click', toggleNoteMode);
 $('btn-erase').addEventListener('click', erase);
 $('btn-undo').addEventListener('click', undo);
 $('btn-redo').addEventListener('click', redo);
-$('btn-new').addEventListener('click', newSample);
+$('btn-new').addEventListener('click', () => openNewDialog());
 $('btn-keys').addEventListener('click', () => $('dlg-keys').showModal());
 
 // ---- Toast ----
@@ -255,4 +326,7 @@ const saved = load('game', null);
 let restored = null;
 try { restored = saved ? Game.fromJSON(saved) : null; } catch { restored = null; }
 if (restored) startGame(restored);
-else newSample();
+else openNewDialog(true);
+
+// Without a game there is nothing behind the dialog: keep it open.
+$('dlg-new').addEventListener('cancel', (e) => { if (!state.game) e.preventDefault(); });

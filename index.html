@@ -42,7 +42,7 @@
     </div>
     <div class="timer" id="timer" aria-label="Spielzeit">00:00</div>
     <nav class="actions" aria-label="Menü">
-      <button class="icon" id="btn-new" title="Nächstes Beispiel (N)" aria-label="Nächstes Beispiel"><svg><use href="#i-plus"/></svg></button>
+      <button class="icon" id="btn-new" title="Neues Rätsel (N)" aria-label="Neues Rätsel"><svg><use href="#i-plus"/></svg></button>
     </nav>
   </header>
 
@@ -74,6 +74,33 @@
 </div>
 
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<dialog id="dlg-new" aria-labelledby="new-title">
+  <form method="dialog">
+    <h2 id="new-title">Neues Rätsel</h2>
+    <p class="hint" id="new-hint"></p>
+    <fieldset class="segmented" id="new-variant">
+      <legend>Spielart</legend>
+    </fieldset>
+    <fieldset class="levels" id="new-levels">
+      <legend>Stufe</legend>
+    </fieldset>
+    <div class="buttons">
+      <button value="cancel" class="secondary" id="new-cancel">Abbrechen</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="dlg-confirm" aria-labelledby="confirm-title">
+  <form method="dialog">
+    <h2 id="confirm-title"></h2>
+    <p id="confirm-text"></p>
+    <div class="buttons">
+      <button value="no" class="secondary">Abbrechen</button>
+      <button value="yes" id="confirm-yes">OK</button>
+    </div>
+  </form>
+</dialog>
 
 <dialog id="dlg-keys" aria-labelledby="keys-title">
   <form method="dialog">
