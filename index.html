@@ -43,6 +43,9 @@
     <div class="timer" id="timer" aria-label="Spielzeit">00:00</div>
     <nav class="actions" aria-label="Menü">
       <button class="icon" id="btn-new" title="Neues Rätsel (N)" aria-label="Neues Rätsel"><svg><use href="#i-plus"/></svg></button>
+      <button class="icon" id="btn-share" title="Rätsel teilen" aria-label="Rätsel teilen"><svg><use href="#i-share"/></svg></button>
+      <button class="icon" id="btn-stats" title="Statistik" aria-label="Statistik"><svg><use href="#i-stats"/></svg></button>
+      <button class="icon" id="btn-settings" title="Einstellungen" aria-label="Einstellungen"><svg><use href="#i-gear"/></svg></button>
     </nav>
   </header>
 
@@ -57,11 +60,18 @@
         <div class="timer" id="timer-side">00:00</div>
       </div>
 
+      <section class="combos" id="combos" hidden>
+        <h2 id="combos-title">Käfig</h2>
+        <ul id="combos-list"></ul>
+      </section>
+
       <div class="tools" role="toolbar" aria-label="Werkzeuge">
         <button class="tool" id="btn-notes" aria-pressed="false" title="Notizmodus (Leertaste)"><svg><use href="#i-pencil"/></svg><span>Notiz</span></button>
         <button class="tool" id="btn-erase" title="Löschen (Entf)"><svg><use href="#i-erase"/></svg><span>Löschen</span></button>
         <button class="tool" id="btn-undo" title="Rückgängig (Strg+Z)"><svg><use href="#i-undo"/></svg><span>Zurück</span></button>
         <button class="tool" id="btn-redo" title="Wiederholen (Strg+Y)"><svg><use href="#i-redo"/></svg><span>Vor</span></button>
+        <button class="tool" id="btn-fill" title="Alle Kandidaten ausfüllen" hidden><svg><use href="#i-fill"/></svg><span>Kandidaten</span></button>
+        <button class="tool" id="btn-check" title="Prüfen"><svg><use href="#i-check"/></svg><span>Prüfen</span></button>
       </div>
 
       <div class="pad" id="pad" role="group" aria-label="Ziffern"></div>
@@ -91,13 +101,42 @@
   </form>
 </dialog>
 
-<dialog id="dlg-confirm" aria-labelledby="confirm-title">
+<dialog id="dlg-settings" aria-labelledby="settings-title">
   <form method="dialog">
-    <h2 id="confirm-title"></h2>
-    <p id="confirm-text"></p>
+    <h2 id="settings-title">Einstellungen</h2>
+    <h3>Hilfen</h3>
+    <label class="switch"><input type="checkbox" name="notes"><span>Notizen</span></label>
+    <label class="switch"><input type="checkbox" name="autoRemove"><span>Notizen automatisch streichen, wenn eine Ziffer gesetzt wird</span></label>
+    <label class="switch"><input type="checkbox" name="fillCandidates"><span>Knopf „Alle Kandidaten ausfüllen“<small>Gelöste Rätsel zählen dann getrennt.</small></span></label>
+    <label class="switch"><input type="checkbox" name="combos"><span>Käfig-Kombinationen anzeigen</span></label>
+    <fieldset class="radio">
+      <legend>Fehleranzeige</legend>
+      <label><input type="radio" name="errors" value="off"><span>Aus – nur der Knopf „Prüfen“</span></label>
+      <label><input type="radio" name="errors" value="rules"><span>Regelkonflikte<small>Doppelte Ziffern, falsche Käfigsummen. Verrät die Lösung nicht.</small></span></label>
+      <label><input type="radio" name="errors" value="solution"><span>Gegen die Lösung<small>Jede falsche Ziffer sofort. Gelöste Rätsel zählen dann getrennt.</small></span></label>
+    </fieldset>
+    <h3>Darstellung</h3>
+    <label class="switch"><input type="checkbox" name="highlightHouses"><span>Zeile, Spalte und Block der Zelle hervorheben</span></label>
+    <label class="switch"><input type="checkbox" name="highlightDigits"><span>Gleiche Ziffern hervorheben</span></label>
+    <fieldset class="radio inline">
+      <legend>Farben</legend>
+      <label><input type="radio" name="theme" value="system"><span>wie das System</span></label>
+      <label><input type="radio" name="theme" value="light"><span>hell</span></label>
+      <label><input type="radio" name="theme" value="dark"><span>dunkel</span></label>
+    </fieldset>
+    <p class="meta">Version <span id="version"></span> · <a href="kontakt.html">Kontakt &amp; Datenschutz</a></p>
+    <div class="buttons"><button value="close">Fertig</button></div>
+  </form>
+</dialog>
+
+<dialog id="dlg-stats" aria-labelledby="stats-title">
+  <form method="dialog">
+    <h2 id="stats-title">Statistik</h2>
+    <div id="stats-body"></div>
+    <p class="hint">Bleibt nur auf diesem Gerät. Die Serie zählt gelöste Rätsel in Folge; wer ein Rätsel abbricht, fängt wieder bei null an.</p>
     <div class="buttons">
-      <button value="no" class="secondary">Abbrechen</button>
-      <button value="yes" id="confirm-yes">OK</button>
+      <button type="button" class="secondary" id="stats-reset">Zurücksetzen</button>
+      <button value="close">Schließen</button>
     </div>
   </form>
 </dialog>
@@ -120,6 +159,29 @@
       <tr><th><kbd>?</kbd></th><td>Diese Übersicht</td></tr>
     </table>
     <div class="buttons"><button value="close">Schließen</button></div>
+  </form>
+</dialog>
+
+<dialog id="dlg-confirm" aria-labelledby="confirm-title">
+  <form method="dialog">
+    <h2 id="confirm-title"></h2>
+    <p id="confirm-text"></p>
+    <div class="buttons">
+      <button value="no" class="secondary">Abbrechen</button>
+      <button value="yes" id="confirm-yes">OK</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="dlg-solved" aria-labelledby="solved-title">
+  <form method="dialog">
+    <h2 id="solved-title">Gelöst</h2>
+    <p class="big" id="solved-time"></p>
+    <p id="solved-text"></p>
+    <div class="buttons">
+      <button value="close" class="secondary">Ansehen</button>
+      <button value="new" id="solved-new">Nächstes Rätsel</button>
+    </div>
   </form>
 </dialog>
 
