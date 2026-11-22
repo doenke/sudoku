@@ -21,6 +21,7 @@
   --ink-soft: #57544c;
   --ink-faint: #8d897e;
   --rule: #1b1a17;
+  --rule-box: #6b675d;
   --rule-thin: #b8b2a4;
   --cage: #4a463d;
   --entry: #1d4f91;
@@ -48,6 +49,7 @@
     --ink-soft: #b5b1a7;
     --ink-faint: #858178;
     --rule: #d9d5cc;
+    --rule-box: #8f8b82;
     --rule-thin: #4c4c4f;
     --cage: #b9b4a9;
     --entry: #8fb5ef;
@@ -72,6 +74,7 @@
   --ink-soft: #b5b1a7;
   --ink-faint: #858178;
   --rule: #d9d5cc;
+  --rule-box: #8f8b82;
   --rule-thin: #4c4c4f;
   --cage: #b9b4a9;
   --entry: #8fb5ef;
@@ -225,7 +228,8 @@ svg { width: 1.25em; height: 1.25em; fill: none; stroke: currentColor; stroke-wi
 .lines { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; overflow: visible; }
 .lines line, .lines rect, .lines path { vector-effect: non-scaling-stroke; fill: none; }
 .lines .thin line { stroke: var(--rule-thin); stroke-width: 1px; }
-.lines .thick line, .lines .thick rect { stroke: var(--rule); stroke-width: 2.5px; }
+.lines .thick line { stroke: var(--rule-box); stroke-width: 1.6px; }
+.lines .thick rect { stroke: var(--rule); stroke-width: 2.5px; }
 .lines .cages path { stroke: var(--cage); stroke-width: 1.2px; stroke-dasharray: 3 2.5; }
 .lines .cages path.conflict { stroke: var(--error); stroke-width: 2px; }
 
