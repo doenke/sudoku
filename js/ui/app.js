@@ -86,6 +86,7 @@ function render() {
   for (const el of [$('btn-fill'), $('btn-check'), $('btn-erase')]) el.disabled = g.solved;
   for (const b of padButtons) b.classList.toggle('done', g.count(+b.dataset.d) >= 9);
   renderCombos();
+  renderLabel();
 }
 
 function renderCombos() {
@@ -122,6 +123,40 @@ function renderCombos() {
     li.append(b);
     return li;
   }));
+}
+
+/** If the selection consists of two or more whole cages: their count and total. */
+function selectedCagesSum() {
+  const g = state.game;
+  if (!g.model.cages.length || state.selection.size < 2) return null;
+  const cages = new Set();
+  for (const c of state.selection) {
+    const k = g.model.cellCage[c];
+    if (k < 0) return null;
+    cages.add(k);
+  }
+  let cells = 0, sum = 0;
+  for (const k of cages) { cells += g.model.cages[k].cells.length; sum += g.model.cages[k].sum; }
+  if (cages.size < 2 || cells !== state.selection.size) return null;
+  return { count: cages.size, cells, sum };
+}
+
+function renderLabel() {
+  const text = puzzleLabel(state.game);
+  const s = selectedCagesSum();
+  for (const el of [$('label'), $('label-side')]) {
+    el.textContent = text;
+    if (s) {
+      const b = document.createElement('span');
+      b.className = 'selsum';
+      b.textContent = `${s.count} Käfige · ${s.cells} Zellen · Summe ${s.sum}`;
+      b.title = 'Summe der markierten Käfige';
+      const sep = document.createElement('span');
+      sep.className = 'sep';
+      sep.textContent = ' · ';
+      el.append(sep, b);
+    }
+  }
 }
 
 function puzzleLabel(g) {
@@ -223,9 +258,6 @@ function startGame(game) {
   state.noteMode = false;
   state.checkMarks = null;
   board.setGame(game);
-  const label = puzzleLabel(game);
-  $('label').textContent = label;
-  $('label-side').textContent = label;
   markAssistedIfNeeded();
   persist();
   render();

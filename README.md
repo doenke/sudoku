@@ -155,7 +155,17 @@ wird gestrichelt durchgestrichen, ein zweiter Tipp holt sie zurück. Deine
 Streichungen gehören zum Spielstand und sind nach einem Neustart noch da.
 Welche Schlüsse du daraus ziehst, bleibt deine Sache.
 
-### 6. Teilen
+### 6. Käfige zusammenrechnen
+
+Markierst du mehrere Käfige vollständig – mit dem Finger darüberziehen oder
+am Laptop mit Strg-Klick –, steht unter „Sudoku“ (am Laptop im Seitenpanel),
+wie viele Käfige und Zellen das sind und wie groß ihre Summe ist, etwa
+„3 Käfige · 9 Zellen · Summe 52“. Praktisch für die 45er-Regel: Zieh die
+Käfige eines Blocks zusammen, und du siehst sofort, was für die übrigen
+Zellen bleibt. Fehlt eine Zelle oder ist eine zu viel dabei, verschwindet die
+Angabe wieder.
+
+### 7. Teilen
 
 Das Pfeil-Symbol oben teilt das aktuelle Rätsel: auf dem Handy über das
 normale Teilen-Menü, am Laptop wird der Link kopiert. Wer ihn öffnet, startet
