@@ -147,8 +147,13 @@ Laptop auch die Taste K). Ist er an, zeigt die App zum gewählten Käfig alle
 Ziffernkombinationen, die zur Summe und Größe passen – ein Tipp, und das Panel
 ist wieder weg, wenn du es lieber selbst rechnen willst. Der Knopf und der
 Schalter in den Einstellungen sind dieselbe Einstellung.
-Kombinationen, die durch gesetzte Ziffern nicht mehr gehen, sind
-durchgestrichen. Welche du daraus ableitest, bleibt deine Sache.
+Das Panel steht unter dem Ziffernfeld, damit beim Ein- und Ausblenden nichts
+verrutscht. Kombinationen, die durch gesetzte Ziffern nicht mehr gehen, sind
+grau durchgestrichen. Und was du selbst ausgeschlossen hast – etwa weil die 9
+in diesem Käfig keinen Platz mehr hat –, tippst du einfach an: Die Kombination
+wird gestrichelt durchgestrichen, ein zweiter Tipp holt sie zurück. Deine
+Streichungen gehören zum Spielstand und sind nach einem Neustart noch da.
+Welche Schlüsse du daraus ziehst, bleibt deine Sache.
 
 ### 6. Teilen
 

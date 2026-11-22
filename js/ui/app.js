@@ -103,11 +103,23 @@ function renderCombos() {
   }
   const cage = g.model.cages[k];
   $('combos-title').textContent = `Käfig ${cage.sum} · ${cage.cells.length} ${cage.cells.length === 1 ? 'Zelle' : 'Zellen'}`;
-  const status = cageComboStatus(g.model, g.values, k);
-  list.replaceChildren(...status.map(({ digits, possible }) => {
+  const status = cageComboStatus(g.model, g.values, k).sort((a, b) => a.digits.join('').localeCompare(b.digits.join('')));
+  list.replaceChildren(...status.map(({ mask, digits, possible }) => {
     const li = document.createElement('li');
-    li.textContent = digits.join('');
-    if (!possible) { li.className = 'off'; li.title = 'durch gesetzte Ziffern unmöglich'; }
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.textContent = digits.join('');
+    const out = g.isExcluded(k, mask);
+    b.setAttribute('aria-pressed', String(out));
+    if (out) b.classList.add('out');
+    if (!possible) b.classList.add('off');
+    b.title = !possible ? 'durch gesetzte Ziffern unmöglich' : out ? 'ausgeschlossen – antippen zum Zurückholen' : 'antippen zum Ausschließen';
+    b.addEventListener('click', () => {
+      g.toggleExcluded(k, mask);
+      persist();
+      renderCombos();
+    });
+    li.append(b);
     return li;
   }));
 }
@@ -528,7 +540,7 @@ for (let d = 1; d <= 9; d++) {
   padButtons.push(b);
 }
 // Keep focus and selection on the board when tapping controls.
-for (const el of [$('pad'), document.querySelector('.tools')]) el.addEventListener('pointerdown', (e) => e.preventDefault());
+for (const el of [$('pad'), document.querySelector('.tools'), $('combos')]) el.addEventListener('pointerdown', (e) => e.preventDefault());
 
 $('btn-notes').addEventListener('click', toggleNoteMode);
 $('btn-erase').addEventListener('click', erase);

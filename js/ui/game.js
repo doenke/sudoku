@@ -23,6 +23,7 @@ export class Game {
     this.solved = false;
     this.assisted = false; // used "against the solution" or "fill all candidates"
     this.moves = 0;
+    this.excluded = {}; // cage index -> combination masks ruled out by the player
     this._solution = null;
   }
 
@@ -118,6 +119,14 @@ export class Game {
     return this.commit(changes);
   }
 
+  isExcluded(cage, mask) { return (this.excluded[cage] || []).includes(mask); }
+
+  toggleExcluded(cage, mask) {
+    const list = this.excluded[cage] || [];
+    this.excluded[cage] = list.includes(mask) ? list.filter((m) => m !== mask) : [...list, mask];
+    if (!this.excluded[cage].length) delete this.excluded[cage];
+  }
+
   isFull() { return this.values.every((v) => v > 0); }
 
   isCorrect() {
@@ -143,6 +152,7 @@ export class Game {
       elapsed: Math.round(this.elapsed),
       solved: this.solved,
       assisted: this.assisted,
+      excluded: this.excluded,
       moves: this.moves,
     };
   }
@@ -156,6 +166,7 @@ export class Game {
     g.elapsed = data.elapsed || 0;
     g.solved = !!data.solved;
     g.assisted = !!data.assisted;
+    g.excluded = data.excluded || {};
     g.moves = data.moves || g.history.length;
     return g;
   }
